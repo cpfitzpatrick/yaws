@@ -1,33 +1,39 @@
+######################### housekeeping ################################
+# Date: 3 May 2014
+# By: Christopher Fitzpatrick
+# Description: compartmental (Markov) model and probabilistic sensitivity analysis to analyse cost-effectiveness of a global yaws eradication programme
+# R version: 3.0.2
+
 ######################### load packages #####################################
 
-library(stats, lib="D:/Rlibrary")
-library(plyr, lib="D:/Rlibrary")
-library(reshape, lib="D:/Rlibrary")
-library(mvtnorm, lib="D:/Rlibrary")
-library(mc2d, lib="D:/Rlibrary")
-library(abind, lib="D:/Rlibrary")
-library(ggplot2, lib="D:/Rlibrary")
-library(ggthemes, lib="D:/Rlibrary")
-library(eha, lib="D:/Rlibrary")
-library(msm, lib="D:/Rlibrary")
-library(tkrplot, lib="D:/Rlibrary")
-library(rriskDistributions, lib="D:/Rlibrary")
-library(ggmap, lib="D:/Rlibrary")
-library(mapproj, lib="D:/Rlibrary")
-library(rgeos, lib="D:/Rlibrary")
-library(maptools, lib="D:/Rlibrary")
-library(raster, lib="D:/Rlibrary")
-library(rgdal, lib="D:/Rlibrary")
-library(reshape2, lib="D:/Rlibrary")
-library(plyr, lib="D:/Rlibrary")
+library(stats)
+library(plyr)
+library(reshape)
+library(mvtnorm)
+library(mc2d)
+library(abind)
+library(ggplot2)
+library(ggthemes)
+library(eha)
+library(msm)
+library(tkrplot)
+library(rriskDistributions)
+library(ggmap)
+library(mapproj)
+library(rgeos)
+library(maptools)
+library(raster)
+library(rgdal)
+library(reshape2)
+library(plyr)
 
 ########################import epi data####################################
 
 # endemicity status
-status<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/yaws-verbose.csv")
+status<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/data/yaws-verbose.csv")
 status<-subset(status, select=c(YEAR..CODE.,COUNTRY..CODE.,COUNTRY..DISPLAY.,Display.Value))
 # reported number of cases
-cases<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/yaws-verbose2.csv")
+cases<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/data/yaws-verbose2.csv")
 cases<-subset(cases, select=c(YEAR..CODE.,COUNTRY..CODE.,COUNTRY..DISPLAY.,Numeric))
 #average number of cases per year
 sum(cases$Numeric[cases$YEAR..CODE.==2012 | (cases$YEAR..CODE.==2008 & cases$COUNTRY..CODE.=="COD")], na.rm=T)
@@ -41,6 +47,8 @@ gecon$MER2005_40<-as.numeric(as.character(gecon$MER2005_40))*1000000000
 gecon$PPP2005_pp<-gecon$PPP2005_40/gecon$POPGPW_2005_40
 gecon$MER2005_pp<-gecon$MER2005_40/gecon$POPGPW_2005_40
 gecon$POPDEN_2005<-gecon$POPGPW_2005_40/as.numeric(as.character(gecon$AREA))
+
+# correct country names
 levels(gecon$COUNTRY)[levels(gecon$COUNTRY)=="Democratic Republic of Congo"] <- "Democratic Republic of the Congo"
 levels(gecon$COUNTRY)[levels(gecon$COUNTRY)=="Bolivia"] <- "Bolivia (Plurinational State of)"
 levels(gecon$COUNTRY)[levels(gecon$COUNTRY)=="Cook Is."] <- "Cook Islands"
@@ -52,22 +60,22 @@ levels(gecon$COUNTRY)[levels(gecon$COUNTRY)=="Tanzania"] <- "United Republic of 
 levels(gecon$COUNTRY)[levels(gecon$COUNTRY)=="Timor Leste"] <- "Timor-Leste"
 levels(gecon$COUNTRY)[levels(gecon$COUNTRY)=="Venezuela"] <- "Venezuela (Bolivarian Republic of)"
 levels(gecon$COUNTRY)[levels(gecon$COUNTRY)=="Vietnam"] <- "Viet Nam"
-unique(gecon$COUNTRY)
+
 # calculate gdp per capita and per square kilometer
 sum(gecon$PPP2005_40[which(gecon$POPGPW_2005_40>0)], na.rm=T)/sum(gecon$POPGPW_2005_40, na.rm=T)
 sum(gecon$PPP2005_40[which(gecon$POPGPW_2005_40>0)], na.rm=T)/sum(as.numeric(gecon$AREA[which(gecon$POPGPW_2005_40>0)]))
 sum(gecon$MER2005_40[which(gecon$POPGPW_2005_40>0)], na.rm=T)/sum(gecon$POPGPW_2005_40, na.rm=T)
 sum(gecon$MER2005_40[which(gecon$POPGPW_2005_40>0)], na.rm=T)/sum(as.numeric(gecon$AREA[which(gecon$POPGPW_2005_40>0)]))
 sum(gecon$MER2005_40)
+
 # subset based on environmental and economic variables
 # We include the entire populations of Solomon Islands and Vanuatu
 list_bigsub<-as.list(subset(status, select="COUNTRY..DISPLAY.", Display.Value=="Currently endemic" | Display.Value=="Previously endemic (current status unknown)"))
-temp<-subset(gecon, lapply(COUNTRY, function (x) any(x %in% list_bigsub$COUNTRY..DISPLAY.))==TRUE)
-unique(temp$COUNTRY)
 gecon_bigsub<-subset(gecon, (lapply(COUNTRY, function (x) any(x %in% list_bigsub$COUNTRY..DISPLAY.))==TRUE & POPDEN_2005<100 & PREC_NEW>500 & TEMP_NEW>20 & (MATTVEG==1 | MATTVEG==2 | MATTVEG==7 | MATTVEG==9 | MATTVEG==15)) | COUNTRY=="Vanuatu" | COUNTRY=="Solomon Islands")
 unique(gecon_bigsub$COUNTRY)
 sum(gecon_bigsub$POPGPW_2005_40)
-# endemic countries only
+
+# PAR in countries of known endemicity 
 gecon_sub<-subset(gecon, COUNTRY=="Benin" | COUNTRY=="Cameroon" | COUNTRY=="Central African Republic" | COUNTRY=="Congo" | COUNTRY=="Cote d'Ivoire"| COUNTRY=="Democratic Republic of the Congo"| COUNTRY=="Ghana"| COUNTRY=="Indonesia"| COUNTRY=="Papua New Guinea"| COUNTRY=="Solomon Islands"| COUNTRY=="Togo"| COUNTRY=="Vanuatu")
 sum(gecon_sub$PPP2005_40[which(gecon_sub$POPGPW_2005_40>0)], na.rm=T)/sum(gecon_sub$POPGPW_2005_40, na.rm=T)
 sum(gecon_sub$PPP2005_40[which(gecon_sub$POPGPW_2005_40>0)], na.rm=T)/sum(as.numeric(gecon_sub$AREA[which(gecon_sub$POPGPW_2005_40>0)]))
@@ -76,12 +84,13 @@ sum(gecon_sub$MER2005_40[which(gecon_sub$POPGPW_2005_40>0)], na.rm=T)/sum(as.num
 sum(gecon_sub$MER2005_40)
 gecon_subsub<-subset(gecon_sub, POPGPW_2005_40>0 & POPDEN_2005<100 & PREC_NEW>500 & TEMP_NEW>20 & (MATTVEG==1 | MATTVEG==2 | MATTVEG==7 | MATTVEG==9 | MATTVEG==15) | (COUNTRY=="Vanuatu" & POPGPW_2005_40>0) | (COUNTRY=="Solomon Islands" & POPGPW_2005_40>0))
 sum(gecon_subsub$POPGPW_2005_40)
-# we limit also to Hackett (1951) latitudes and longitudes for DRC
+# limit also to Hackett (1951) latitudes and longitudes for DRC
 gecon_subsub<-subset(gecon_subsub, COUNTRY!="Democratic Republic of the Congo" | (COUNTRY=="Democratic Republic of the Congo" & ((LAT<=2 & LAT>=-1 & LONGITUDE<=26)|(LAT<=2 & LAT>=-9 & LONGITUDE>=26))))
 sum(gecon_subsub$POPGPW_2005_40)
+
 # PAR in countries of unknown endemicity 
-par_unknown<-sum(gecon_bigsub$POPGPW_2005_40)-sum(gecon_subsub$POPGPW_2005_40)
-par_unknown
+sum(gecon_bigsub$POPGPW_2005_40)-sum(gecon_subsub$POPGPW_2005_40)
+
 # calculate gdp per capita and per square kilometer
 sum(gecon_subsub$PPP2005_40)/sum(gecon_subsub$POPGPW_2005_40)
 sum(gecon_subsub$PPP2005_40)/sum(as.numeric(gecon_subsub$AREA))
@@ -89,14 +98,17 @@ sum(gecon_subsub$MER2005_40)/sum(gecon_subsub$POPGPW_2005_40)
 sum(gecon_subsub$MER2005_40)/sum(as.numeric(gecon_subsub$AREA))
 sum(gecon_subsub$MER2005_40)
 sum(gecon_subsub$MER2005_40)/sum(gecon_sub$MER2005_40)
+
 # aggregate PAR by country
 gecon_sub_byc<-aggregate(cbind(gecon_subsub$POPGPW_2005_40,gecon_subsub$PPP2005_40,gecon_subsub$AREA), by=list(gecon_subsub$COUNTRY), sum, na.rm=TRUE)
 names(gecon_sub_byc)<-c("country","par","gdp","area")
 gecon_sub_byc$par<-as.numeric(gecon_sub_byc$par)
+
 # merge in iso3 codes
 iso3<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/data/iso3_list.csv", header=TRUE)
 gecon_sub_byc<-merge(gecon_sub_byc,iso3,by="country")
 gecon_sub_byc$year<-2005
+
 # format PAR estimates for outsheet
 yaw.par<-as.data.frame(cbind(as.character(gecon_sub_byc$country),as.character(gecon_sub_byc$iso3),gecon_sub_byc$year,round(gecon_sub_byc$par, digits=0),round(gecon_sub_byc$area, digits=0)))
 names(yaw.par)<-c("country","iso3","year","par","area")
@@ -119,6 +131,7 @@ write.csv(yaw.par, file="C:/Users/fitzpatrickc/Dropbox/yaws/yaw_par.csv", row.na
 parmap<-qmap(location="India",zoom=2,maptype = c("satellite"),color="color",source="google")
 breaks<-as.vector(floor(quantile(gecon_subsub$POPGPW_2005_40,c(0.2,0.4,0.6,0.8,1.00))))
 parmap + geom_point(aes(x=LONGITUDE, y=LAT, color=POPGPW_2005_40), data=gecon_subsub) + scale_colour_gradient(low="orange", high = "red", guide="legend", name="population at risk", breaks=breaks) + scale_y_continuous(limits = c(-45,45))
+rm(breaks)
 
 ############## map population at risk using Natural Earth ##############################
 
@@ -150,6 +163,34 @@ parmap + geom_point(aes(x=LONGITUDE, y=LAT, color=POPGPW_2005_40), data=gecon_su
 #   geom_point(aes(x=LONGITUDE, y=LAT, color=POPGPW_2005_40), data=gecon_subsub) +
 #   scale_colour_gradient(low="orange", high = "red", guide="legend", name="population at risk", breaks=breaks)
 
+#############################import national population data###########################
+
+# population by age
+pop_by_age<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/data/pop_by_age.csv", header=TRUE)
+names(pop_by_age)[names(pop_by_age) == "unpop_name"] <- "country"
+levels(pop_by_age$country)[49] <- "Cote d'Ivoire"
+# use 2015 populations
+pop_by_age<-pop_by_age[pop_by_age$year==2015,]
+pop_by_age$pop_0_4<-rowSums(pop_by_age[,c("age_0","age_1","age_2","age_3","age_4")])
+pop_by_age$pop_5_9<-rowSums(pop_by_age[,c("age_5","age_6","age_7","age_8","age_9")])
+pop_by_age$pop_10_14<-rowSums(pop_by_age[,c("age_10","age_11","age_12","age_13","age_14")])
+pop_by_age$pop_15_99<-rowSums(pop_by_age[,which(colnames(pop_by_age)=="age_15"):which(colnames(pop_by_age)=="age_80.")])
+pop_by_age$pop_0_pc<-pop_by_age$age_0
+pop_by_age<-pop_by_age[,c("country", "pop_0_4","pop_5_9","pop_10_14","pop_15_99","pop_0_pc")]
+pop_by_age$pop_total<-pop_by_age$pop_0_4+pop_by_age$pop_5_9+pop_by_age$pop_10_14+pop_by_age$pop_15_99
+# eligible population (more than 6 months)
+pop_by_age$pop_elig<-1-(pop_by_age$pop_0_pc/2)/pop_by_age$pop_total
+# merge and drop
+yaw.pop<-merge(yaw.par, subset(pop_by_age, select=c("country","pop_0_4","pop_5_9","pop_10_14","pop_15_99","pop_total","pop_elig")), by=c("country"))
+
+##################### import unit costs for mass drug administration #########
+uc_mda_bmk<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/data/mda_uc_yaw.csv")
+
+# see the "tool box" below to import World Development Indicators for other analyses.
+
+##################### save image for GitHub########################
+save.image()
+
 #####################set up model parameters#########################
 
 #Number of iterations for uncertainty and variability dimensions
@@ -172,31 +213,12 @@ ctry_num<-nrow(yaw.par)
 iso3<-yaw.par$iso3
 # make empty 4D array for later use
 array4d<-array(NA,dim=c(ctry_num, cycle_num, ndunc, ndvar), dimnames=list(iso3=iso3,cycle=1:cycle_num,ndunc=1:ndunc,ndvar=1:ndvar))
+# and with zeroes
 array4dz<-array(0,dim=c(ctry_num, cycle_num, ndunc, ndvar), dimnames=list(iso3=iso3,cycle=1:cycle_num,ndunc=1:ndunc,ndvar=1:ndvar))
 dim(array4d)
 dimnames(array4d)
 
-#############################import population data###########################
-
-# population by age
-pop_by_age<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/data/pop_by_age.csv", header=TRUE)
-names(pop_by_age)[names(pop_by_age) == "unpop_name"] <- "country"
-levels(pop_by_age$country)[49] <- "Cote d'Ivoire"
-# use 2015 populations
-pop_by_age<-pop_by_age[pop_by_age$year==2015,]
-pop_by_age$pop_0_4<-rowSums(pop_by_age[,c("age_0","age_1","age_2","age_3","age_4")])
-pop_by_age$pop_5_9<-rowSums(pop_by_age[,c("age_5","age_6","age_7","age_8","age_9")])
-pop_by_age$pop_10_14<-rowSums(pop_by_age[,c("age_10","age_11","age_12","age_13","age_14")])
-pop_by_age$pop_15_99<-rowSums(pop_by_age[,which(colnames(pop_by_age)=="age_15"):which(colnames(pop_by_age)=="age_80.")])
-pop_by_age$pop_0_pc<-pop_by_age$age_0
-pop_by_age<-pop_by_age[,c("country", "pop_0_4","pop_5_9","pop_10_14","pop_15_99","pop_0_pc")]
-pop_by_age$pop_total<-pop_by_age$pop_0_4+pop_by_age$pop_5_9+pop_by_age$pop_10_14+pop_by_age$pop_15_99
-# eligible population (more than 6 months)
-pop_by_age$pop_elig<-1-(pop_by_age$pop_0_pc/2)/pop_by_age$pop_total
-# merge and drop
-yaw.pop<-merge(yaw.par, subset(pop_by_age, select=c("country","pop_0_4","pop_5_9","pop_10_14","pop_15_99","pop_total","pop_elig")), by=c("country"))
-
-#########################estimate population at risk and treatment targets ####################
+######################### reflect expert opinion on population at risk ####################
 
 # population at risk % (country specific, not cycle specific, and uncertain)
 par_p<-array(NA, dim=c(ctry_num,ndunc), dimnames=list(iso3=iso3,ndunc=1:ndunc))
@@ -230,7 +252,7 @@ for (i in 1:ctry_num) {
 }
 
 # new cases
-# use latest reported value
+# use maximum reported value
 new<-array4dz
 new["BEN",1:2,,]<-max(cases[which(cases$COUNTRY..CODE.=="BEN"),]$Numeric, na.rm=T)*cycle_len/cdr["BEN",1:2,,]
 new["CMR",1:2,,]<-max(cases[which(cases$COUNTRY..CODE.=="CMR"),]$Numeric, na.rm=T)*cycle_len/cdr["CMR",1:2,,]
@@ -251,6 +273,8 @@ ter<-array4dz
 dea<-array4dz
 
 ################################ define other effect model parameters#############################
+
+# while we use uniform distributions, alternatives are easily accomodated. See the "tool box" below.
 
 #discount rate on effects (country but not year specific)
 temp<-array(1-exp(-runif(ndunc,min=0.00, max=0.03)*cycle_len),dim=c(ctry_num, ndunc))
@@ -335,12 +359,12 @@ new_death<-0
 rate_new_pri<--log(1-new_pri_p)/gen_time
 new_pri<-(1-exp(-rate_new_pri))*(1-new_death)
 new_new<-1-new_death-new_pri
-# pri is pimary cases  
+# pri is primary stage cases  
 pri_death<-prob_death
 rate_pri_sec<--log(1-pri_sec_p)/dur_pri_sec
 pri_sec<-(1-exp(-rate_pri_sec))*(1-pri_death)
 pri_pri<-1-pri_death-pri_sec
-# sec is secondary cases
+# sec is secondary stage cases
 sec_death<-prob_death
 rate_sec_ter<--log(1-sec_ter_p)/dur_sec_ter
 sec_ter<-(1-exp(-rate_sec_ter))*(1-sec_death)
@@ -350,7 +374,7 @@ sec_sec<-1-sec_death-sec_ter-sec_lat
 lat_death<-prob_death
 lat_sec<-(1-sec_death-sec_ter)*(1-lat_p)
 lat_lat<-1-lat_death-lat_sec
-# ter is tertiary cases
+# ter is tertiary stage cases
 ter_death<-prob_death
 ter_ter<-1-ter_death
 
@@ -395,8 +419,7 @@ plot(early_collapse_best)
 #######################run Markov model of effects (eradication)#########################
 
 # programmatic parameters
-# these we allow to vary by country and cycle, with no correlation (see "tool box" below if we wish to impose correlation)
-
+# these we allow to vary by country and cycle, with no correlation (see "tool box" below to impose correlation)
 # coverage
 cover<-array4dz
 # in first (TCT) round
@@ -472,6 +495,7 @@ pri_diff<-pri_collapse-pri_erad_collapse
 sec_diff<-sec_collapse-sec_erad_collapse
 ter_diff<-ter_collapse-ter_erad_collapse
 early_diff<-early_collapse-early_erad_collapse
+
 # plot mean differences for visual check
 pri_diff_best<-apply(pri_diff,1,mean)
 sec_diff_best<-apply(sec_diff,1,mean)
@@ -481,13 +505,14 @@ plot(pri_diff_best[1:cycle_num]/1000, x=1:cycle_num, xlab="", ylab="thousands")
 plot(sec_diff_best[1:cycle_num]/1000, x=1:cycle_num, xlab="", ylab="thousands")
 plot(ter_diff_best[1:cycle_num]/1000, x=1:cycle_num, xlab="", ylab="thousands")
 plot(early_diff_best[1:cycle_num]/1000, x=1:cycle_num, xlab="", ylab="thousands")
-# highs and low
+
+# calculate highs and lows for the confidence intervals
 early_diff_lo<-apply(early_diff,1,function(x) quantile(x, probs=c(0.05),na.rm=TRUE))
 early_diff_hi<-apply(early_diff,1,function(x) quantile(x, probs=c(0.95),na.rm=TRUE))
 ter_diff_lo<-apply(ter_diff,1,function(x) quantile(x, probs=c(0.05),na.rm=TRUE))
 ter_diff_hi<-apply(ter_diff,1,function(x) quantile(x, probs=c(0.95),na.rm=TRUE))
 
-# for presentation of disease dynamics and impact, collapse into years not cylces
+# for presentation of disease dynamics and impact, collapse into years not cycles
 early_diff_best_yearly<-rep(NA, years)
 early_diff_lo_yearly<-rep(NA, years)
 early_diff_hi_yearly<-rep(NA, years)
@@ -643,7 +668,6 @@ sero_usd<-uc_sero*sero_num
 
 # implementation
 # based on benchmark values
-uc_mda_bmk<-read.csv(file="C:/Users/fitzpatrickc/Dropbox/yaws/mda_uc_yaw.csv")
 uc_mda_bmk<-uc_mda_bmk[with(uc_mda_bmk, order(country)),]
 # sort by country, as in other databases
 uc_mda<-array4dz
@@ -844,84 +868,76 @@ ceac.plot(bcea)
 evi.plot(bcea)
 
 ############# TOOL BOX ##################
-
-# impose correlation structure in PSA
-# use cornode (Iman-Conover method) from mc2d to impose correlation structures
-mat <- cbind(disc_c,disc_e)
-cor(mat)
-corr1 <- matrix(c(1, 0.99, 0.99, 1), ncol=2)
-matc <- cornode(mat, target=corr1)
-cor(matc)
-# or use package copula
-install.packages("copula", lib="D:/Rlibrary", dependencies=TRUE)
-library(copula, lib="D:/Rlibrary")
-rho<-0.5 # Spearman's rho
-# For normal and T elliptical copulas, rho=sin(pi/2*tau) 
-tau<-asin(rho)*2/pi # Kendall's tau
-temp <- mvdc(normalCopula(rho), c("gamma", "norm"), list(list(shape = 1, rate = 2), list(mean = 0, sd =2))) 
-dat <- rMvdc(1000, temp) 
-cor(dat)
-# The Frank copula is a symmetric Archimedean copula. The relationship between Kendall's tau rank correlation coefficient and the Frank copula parameter is given by (1-tau)/4
-# The Clayton copula is an asymmetric Archimedean copula, exhibiting greater dependence in the negative tail than in the positive. The relationship between Kendall's tau and the Clayton copula parameter is given by 2*tau/(1-tau) 
-# The Gumbel copula (a.k.a. Gumbel-Hougard copula) is an asymmetric Archimedean copula, exhibiting greater dependence in the positive tail than in the negative. The relationship is given by 1/(1-tau)
-# http://www.vosesoftware.com/ModelRiskHelp/index.htm#Modeling_correlation/Copulas.htm
-
-# import data from the Global Health Observatory
-# you may need to run the following before downloading (depending on proxy settings)
-setInternet2()
-# WHO GHO
-# http://apps.who.int/gho/data/view.main
-whoData1<-read.csv(url("http://apps.who.int/gho/athena/data/data-verbose.csv?target=GHO/NTD_1&profile=verbose&filter=COUNTRY:*"))
-whoData2<-read.csv(url("http://apps.who.int/gho/athena/data/data-verbose.csv?target=GHO/NTD_2&profile=verbose&filter=COUNTRY:*"))
-
-# import data from WDI
-# http://data.worldbank.org/data-catalog/world-development-indicators
-# http://cran.r-project.org/web/packages/WDI/index.html
-library(WDI, lib="D:/Rlibrary")
-library(countrycode, lib="D:/Rlibrary")
-# Use the WDIsearch function to get a list of indicators
-indicatorMetaData <- WDIsearch("Population", field="name", short=FALSE)
-# Define a list of countries for which to pull data
-countries <- c("United States", "Britain", "Sweden", "Germany")
-# Convert the country names to iso2c format used in the World Bank data
-iso2cNames <- countrycode(countries, "country.name", "iso2c")
-# Pull data for individual or all countries, single or multiple indicators
-wdi_gdp2 <- WDI(country="all", indicator = "SP.POP.TOTL", start=2001, end=2050, extra=TRUE)
-wdi_gdp3 <- WDI(country="all", indicator=c("NV.AGR.PCAP.KD.ZG","GDPPCKD"), start=2001, end=2011, extra=TRUE)
-## Filter out the aggregates
-subData <- subset(wdi_gdp3, !iso3c %in% NA) 
-
-# get distribution parameters
-# http://cran.r-project.org/web/packages/rriskDistributions/
-test<-rnorm(10000,100,20)
-hist(test)
-# load GUI to test all distributions
-fit.cont(test)
-# get parameters for a specific distribution by maximum likelihood  
-# including: "norm", "exp", "lnorm", "logis", "gamma", "weibull", "beta", "chisq", "t", "f", "cauchy", "gompertz"
-a<-rriskFitdist.cont(test, "norm", method = c("mle"))
-a$estimate                  
-# get parameters for a specific distribution by method of moments
-b<-rriskFitdist.cont(test, "norm", method = c("mme"))
-b$estimate                  
-a<-fit.perc(p=c(0.025,0.5,0.6,0.975),q=c(1,3.5,4,7))
-a$fittedParams
-# or if you think you know the distribution
-# triangle, from three or more quantiles
-b<-get.triang.par(p=c(0.025,0.5,0.975),q=c(1,3,5))
-b
-# pert, from four or more quantiles
-c<-get.pert.par(p=c(0.025,0.5,0.6,0.975),q=c(1,3.5,4,7))
-c
-# beta, from two or more quantiles
-d<-get.beta.par(p=c(0.025,0.975),q=c(0.2,0.8))
-d
-# gamma, from two or more quantiles
-e<-get.gamma.par(p=c(0.025,0.975),q=c(1,5))
-e
-# log normal, from two or more
-f<-get.lnorm.par(p=c(0.025,0.5,0.975),q=c(0.88,1.88,4.31))
-
+# 
+# # impose correlation structure in PSA
+# # use cornode (Iman-Conover method) from mc2d to impose correlation structures
+# mat <- cbind(disc_c,disc_e)
+# cor(mat)
+# corr1 <- matrix(c(1, 0.99, 0.99, 1), ncol=2)
+# matc <- cornode(mat, target=corr1)
+# cor(matc)
+# # or use package copula
+# install.packages("copula", lib="D:/Rlibrary", dependencies=TRUE)
+# library(copula, lib="D:/Rlibrary")
+# rho<-0.5 # Spearman's rho
+# # For normal and T elliptical copulas, rho=sin(pi/2*tau) 
+# tau<-asin(rho)*2/pi # Kendall's tau
+# temp <- mvdc(normalCopula(rho), c("gamma", "norm"), list(list(shape = 1, rate = 2), list(mean = 0, sd =2))) 
+# dat <- rMvdc(1000, temp) 
+# cor(dat)
+# # The Frank copula is a symmetric Archimedean copula. The relationship between Kendall's tau rank correlation coefficient and the Frank copula parameter is given by (1-tau)/4
+# # The Clayton copula is an asymmetric Archimedean copula, exhibiting greater dependence in the negative tail than in the positive. The relationship between Kendall's tau and the Clayton copula parameter is given by 2*tau/(1-tau) 
+# # The Gumbel copula (a.k.a. Gumbel-Hougard copula) is an asymmetric Archimedean copula, exhibiting greater dependence in the positive tail than in the negative. The relationship is given by 1/(1-tau)
+# # http://www.vosesoftware.com/ModelRiskHelp/index.htm#Modeling_correlation/Copulas.htm
+# 
+# # import data from WDI
+# # http://data.worldbank.org/data-catalog/world-development-indicators
+# # http://cran.r-project.org/web/packages/WDI/index.html
+# library(WDI, lib="D:/Rlibrary")
+# library(countrycode, lib="D:/Rlibrary")
+# # Use the WDIsearch function to get a list of indicators
+# indicatorMetaData <- WDIsearch("Population", field="name", short=FALSE)
+# # Define a list of countries for which to pull data
+# countries <- c("United States", "Britain", "Sweden", "Germany")
+# # Convert the country names to iso2c format used in the World Bank data
+# iso2cNames <- countrycode(countries, "country.name", "iso2c")
+# # Pull data for individual or all countries, single or multiple indicators
+# wdi_gdp2 <- WDI(country="all", indicator = "SP.POP.TOTL", start=2001, end=2050, extra=TRUE)
+# wdi_gdp3 <- WDI(country="all", indicator=c("NV.AGR.PCAP.KD.ZG","GDPPCKD"), start=2001, end=2011, extra=TRUE)
+# ## Filter out the aggregates
+# subData <- subset(wdi_gdp3, !iso3c %in% NA) 
+# 
+# # alternative distributions
+# # http://cran.r-project.org/web/packages/rriskDistributions/
+# test<-rnorm(10000,100,20)
+# hist(test)
+# # load GUI to test all distributions
+# fit.cont(test)
+# # get parameters for a specific distribution by maximum likelihood  
+# # including: "norm", "exp", "lnorm", "logis", "gamma", "weibull", "beta", "chisq", "t", "f", "cauchy", "gompertz"
+# a<-rriskFitdist.cont(test, "norm", method = c("mle"))
+# a$estimate                  
+# # get parameters for a specific distribution by method of moments
+# b<-rriskFitdist.cont(test, "norm", method = c("mme"))
+# b$estimate                  
+# a<-fit.perc(p=c(0.025,0.5,0.6,0.975),q=c(1,3.5,4,7))
+# a$fittedParams
+# # or if you think you know the distribution
+# # triangle, from three or more quantiles
+# b<-get.triang.par(p=c(0.025,0.5,0.975),q=c(1,3,5))
+# b
+# # pert, from four or more quantiles
+# c<-get.pert.par(p=c(0.025,0.5,0.6,0.975),q=c(1,3.5,4,7))
+# c
+# # beta, from two or more quantiles
+# d<-get.beta.par(p=c(0.025,0.975),q=c(0.2,0.8))
+# d
+# # gamma, from two or more quantiles
+# e<-get.gamma.par(p=c(0.025,0.975),q=c(1,5))
+# e
+# # log normal, from two or more
+# f<-get.lnorm.par(p=c(0.025,0.5,0.975),q=c(0.88,1.88,4.31))
+# 
 
 
 
