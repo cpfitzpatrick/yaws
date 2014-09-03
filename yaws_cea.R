@@ -1,8 +1,8 @@
-######################### housekeeping ################################
+######################### terms and conditions ################################
 # Date: 26 August 2014
-# By: Christopher Fitzpatrick, World Health Organizationes
+# By: Christopher Fitzpatrick, World Health Organization
 # Description: compartmental (Markov) model and probabilistic sensitivity analysis to analyse cost-effectiveness of a global yaws eradication programme
-# Terms of use: please write Christopher at fitzpatrickc@who.int
+# Terms of use: please see LICENSE.txt describing the terms of the GNU General Public License, version 3, or write Christopher at fitzpatrickc@who.int
 # R version: 3.0.2
 
 ######################### load packages #####################################
